@@ -1,0 +1,41 @@
+{
+	"ImportPath": "github.com/aybabtme/crawler",
+	"GoVersion": "go1.2.2",
+	"Packages": [
+		"./..."
+	],
+	"Deps": [
+		{
+			"ImportPath": "code.google.com/p/cascadia",
+			"Comment": "null-26",
+			"Rev": "890de327fd65c76968fd5705d2126a19ef332ec5"
+		},
+		{
+			"ImportPath": "code.google.com/p/go.net/html",
+			"Comment": "null-113",
+			"Rev": "93f5aef8cb255f3cd59534351f74cb9da5234ae5"
+		},
+		{
+			"ImportPath": "github.com/PuerkitoBio/goquery",
+			"Comment": "v0.3.2",
+			"Rev": "f065786d418c9d22a33cad33decd59277af31471"
+		},
+		{
+			"ImportPath": "github.com/PuerkitoBio/purell",
+			"Comment": "v0.1.0-10-g1909519",
+			"Rev": "1909519b19f44750062c3e8209d65c0921f18060"
+		},
+		{
+			"ImportPath": "github.com/gorilla/context",
+			"Rev": "a08edd30ad9e104612741163dc087a613829a23c"
+		},
+		{
+			"ImportPath": "github.com/gorilla/mux",
+			"Rev": "9ede152210fa25c1377d33e867cb828c19316445"
+		},
+		{
+			"ImportPath": "github.com/temoto/robotstxt-go",
+			"Rev": "207003cc18bd0551c9699702da3eb507fd1e1009"
+		}
+	]
+}
