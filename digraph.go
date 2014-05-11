@@ -5,12 +5,18 @@ import (
 	"sync"
 )
 
-// ResourceGraph of resources.
+// ResourceGraph represents a website as a directed graph where resources
+// are connected by URLs.
 type ResourceGraph interface {
+	// if a URL is reachable on the website.
 	Contains(string) bool
+	// the number of resources in the graph.
 	ResourceCount() int
+	// the number of links interconnecting the resources.
 	LinkCount() int
+	// walks over the graph as long as the func returns true.
 	Walk(func(link string, status int, refersTo, referedBy []string) bool)
+	// can be marshalled to JSON.
 	json.Marshaler
 }
 
