@@ -12,7 +12,7 @@ import (
 	"net/url"
 )
 
-// Crawler produces a directed graphs of links within a single domain.
+// Crawler produces a ResourceGraph from within a single domain.
 type Crawler interface {
 	Crawl() (ResourceGraph, error)
 }
