@@ -37,6 +37,15 @@ Should print things like:
 2014/05/11 02:28:07 done in 3.006155429s
 ```
 
+You can then use the output file, for instance to count how many links point to 404 (needs [jq](https://stedolan.github.io/jq/)):
+```
+jq < mysite.com.json '.resources | map(select(.status_code == 404)) | length'
+```
+Or find out which page led to those 404:
+```
+jq < mysite.com.json '.resources | map(select(.status_code == 404)) | [.[].refered_by[]] | unique'
+```
+
 # Use the lib!
 
 If you want to use the library.
