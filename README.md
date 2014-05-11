@@ -51,7 +51,13 @@ The godocs are on [godoc](http://godoc.org/github.com/aybabtme/crawler) (lol).
 
 ```
 go get -t github.com/aybabtme/crawler
-go test github.com/aybabtme/crawler
+make test
+```
+
+To view the coverage report:
+
+```
+make cover
 ```
 
 # The output

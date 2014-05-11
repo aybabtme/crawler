@@ -18,8 +18,8 @@ type Crawler interface {
 }
 
 // NewCrawler creates a single threaded Crawler that respects robots.txt,
-// starting with domain and all robots.txt SiteMap links on the same domain
-// for root values.
+// starting with domain, plus the links provided in the sitemap. The
+// sitemap is reported by robots.txt.
 //
 // Crawler will write to standard log as it progresses.
 func NewCrawler(domain *url.URL, agent string) (Crawler, error) {
@@ -155,7 +155,6 @@ func (c *crawler) isAcceptable(u *url.URL) bool {
 
 func (c *crawler) generateFollowers(from *url.URL) (followers []*url.URL, status int, err error) {
 	// use named return values to catch the resp.Body.Close() error
-
 	req, err := http.NewRequest("GET", from.String(), nil)
 	if err != nil {
 		return nil, -1, err
@@ -169,12 +168,8 @@ func (c *crawler) generateFollowers(from *url.URL) (followers []*url.URL, status
 
 	status = resp.StatusCode
 
-	switch status / 100 {
-	case 4:
-		log.Printf("[Client error] %s", resp.Status)
-		return
-	case 5:
-		log.Printf("[Server error] %s", resp.Status)
+	switch {
+	case status >= 400:
 		return
 	}
 
