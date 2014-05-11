@@ -17,6 +17,7 @@ var (
 	e              = struct{}{}
 	filesNotToFind = map[string]struct{}{
 		"/robots.txt":                                    e,
+		"/sitemap.xml":                                   e,
 		"/not_allowed_by_robots.txt":                     e,
 		"/this_file_should_not_be_found.html":            e,
 		"/posts/this_file_should_not_be_found.html":      e,

@@ -80,38 +80,43 @@ func (c *crawler) Crawl() (ResourceGraph, error) {
 		fringe.Add(root)
 	}
 
-	log.Printf("[crawling] root has %d elements", fringe.Len())
+	log.Printf("[crawler] root has %d elements", fringe.Len())
 
 	for !fringe.IsEmpty() {
 		link := fringe.Remove()
 
 		followers, status, err = c.generateFollowers(link)
 		if err != nil {
-			log.Printf("[crawling] error: %v", err)
+			log.Printf("[crawler] error: %v", err)
 			continue
 		}
-		dig.MarkStatus(link.String(), status)
 
 		if status >= 400 {
-			log.Printf("[crawling] invalid link: %q", link.String())
+			dig.MarkStatus(link.String(), status)
+			log.Printf("[crawler] status %d : %q", status, link.String())
 			continue
 		}
 
-		// log.Printf("[crawling] %d in fringe, %d followers to link %q", fringe.Len(), len(followers), link.String())
-
+		reject := 0
+		newLinks := 0
 		for _, follow := range followers {
 			if !c.isAcceptable(follow) {
+				reject++
 				continue
 			}
 			if !dig.Contains(follow.String()) {
 				fringe.Add(follow)
+				newLinks++
 			}
 			dig.AddEdge(link.String(), follow.String())
 		}
 
+		log.Printf("[crawler] fringe=%d\tfound=%d (new=%d, rejected=%d)\tsource=%q", fringe.Len(), len(followers), newLinks, reject, link.String())
+
+		dig.MarkStatus(link.String(), status)
 	}
 
-	log.Printf("[crawling] done crawling, %d resources, %d links", dig.ResourceCount(), dig.LinkCount())
+	log.Printf("[crawler] done crawling, %d resources, %d links", dig.ResourceCount(), dig.LinkCount())
 	return dig, err
 }
 
@@ -122,22 +127,10 @@ func (c *crawler) findRoots() []*url.URL {
 	roots.Add(c.base.String())
 
 	for _, site := range c.robot.Sitemaps {
-		dirtyU, err := url.Parse(site)
-		if err != nil {
-			continue
-		}
-		u, err := cleanFromURLString(dirtyU, "")
-		if err != nil {
-			log.Printf("Parsing sitemap URL %q: %v", site, err)
-			continue
-		}
+		dirtyU := must(c.base.Parse(site))
+		u := must(cleanFromURLString(dirtyU, ""))
 		if u.Host != c.base.Host {
 			log.Printf("Wrong sitemap domain: %q", site)
-			continue
-		}
-
-		if roots.Contains(u.String()) {
-			log.Printf("Duplicate in sitemap: %q", site)
 			continue
 		}
 		roots.Add(u.String())
@@ -244,4 +237,11 @@ func cleanFromURLString(from *url.URL, link string) (*url.URL, error) {
 	clean, err := from.Parse(uStr)
 
 	return clean, err
+}
+
+func must(u *url.URL, err error) *url.URL {
+	if err != nil {
+		panic(err)
+	}
+	return u
 }

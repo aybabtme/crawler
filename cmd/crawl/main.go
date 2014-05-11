@@ -13,6 +13,11 @@ import (
 	"time"
 )
 
+var (
+	agent           = "Crawler/abuse:github.com/aybabtme/crawler"
+	defaultFilename = fmt.Sprintf("site_map_%s.json", time.Now().Format("2006-01-02-15-04"))
+)
+
 func usage() {
 	fmt.Fprintf(os.Stderr, "usage: %s [opts]\n", os.Args[0])
 	flag.PrintDefaults()
@@ -27,12 +32,14 @@ func perror(format string, args ...interface{}) {
 func main() {
 
 	host := flag.String("h", "", "host to crawl")
+	filename := flag.String("f", defaultFilename, "file where to write sitemap, will truncate if already exists")
 	flag.Usage = usage
 	flag.Parse()
 
 	switch {
 	case *host == "":
-		perror("missing host name")
+		perror("missing host name\n")
+		flag.PrintDefaults()
 	}
 
 	// use all cores by default
@@ -40,10 +47,14 @@ func main() {
 
 	hostURL, err := url.Parse(*host)
 	if err != nil {
-		perror("invalid host: %v", err)
+		perror("invalid host: %v\n", err)
 	}
 
-	c, err := crawler.NewCrawler(hostURL, "GoCrawler")
+	start := time.Now()
+	log.Printf("starting crawl on %v", hostURL.String())
+	defer func() { log.Printf("done in %v", time.Since(start)) }()
+
+	c, err := crawler.NewCrawler(hostURL, agent)
 	if err != nil {
 		log.Fatalf("[error] creating crawler, %v", err)
 	}
@@ -53,13 +64,15 @@ func main() {
 		log.Fatalf("[error] during crawl, %v", err)
 	}
 
+	log.Printf("preparing sitemap")
+
 	data, err := json.MarshalIndent(dig, "", "    ")
 	if err != nil {
 		log.Fatalf("[error] marshaling sitemap to JSON, %v", err)
 	}
 
-	filename := fmt.Sprintf("site_map_%s.json", time.Now().Format("2006-01-02-15-04"))
-	if err := ioutil.WriteFile(filename, data, 0666); err != nil {
+	log.Printf("saving to %q", *filename)
+	if err := ioutil.WriteFile(*filename, data, 0666); err != nil {
 		log.Fatalf("[error] writing sitemap to file, %v", err)
 	}
 

@@ -1,2 +1,4 @@
-User-Agent: *
+User-agent: *
 Disallow: not_allowed_by_robots.txt
+Sitemap: /sitemap.xml
+Sitemap: http://another.domain/sitemap.xml

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset
+      xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
+            http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
+<!-- created with Free Online Sitemap Generator www.xml-sitemaps.com -->
+
+<url>
+  <loc>http://antoine.im/</loc>
+</url>
+<url>
+  <loc>/</loc>
+</url>
+<url>
+  <loc>not a url</loc>
+</url>
+<url>
+  <loc>/posts/someone_was_right_on_the_internet</loc>
+</url>
+<url>
+  <loc>/posts/someone_is_wrong_on_the_internet</loc>
+</url>
+<url>
+  <loc>/posts/the_story_of_select_and_the_goroutines</loc>
+</url>
+<url>
+  <loc>/posts/dynamic_programming_for_the_lazy</loc>
+</url>
+<url>
+  <loc>/posts/to_buffer_or_not_to_buffer</loc>
+</url>
+<url>
+  <loc>/posts/correction_hacks</loc>
+</url>
+<url>
+  <loc>/assets/data/fifobench/benchcmp.txt</loc>
+  <lastmod>2014-04-30T15:56:34+00:00</lastmod>
+</url>
+</urlset>
