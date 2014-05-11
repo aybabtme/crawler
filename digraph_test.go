@@ -332,7 +332,7 @@ func TestDigraphCanMarshalToJSON(t *testing.T) {
 		gotDig := unmarsh.(map[string]interface{})
 		gotlinkCount := int(gotDig["link_count"].(float64))
 		gotResCount := int(gotDig["resource_count"].(float64))
-		gotResRawCount := len(gotDig["resources"].(map[string]interface{}))
+		gotResRawCount := len(gotDig["resources"].([]interface{}))
 
 		check(t, gotlinkCount == len(tt.input), "want link count %d, got %d", len(tt.input), gotlinkCount)
 		check(t, gotResCount == tt.resourceCount, "want resource count %d, got %d", tt.resourceCount, gotlinkCount)

@@ -78,31 +78,24 @@ found [here](sample_map.json) if you want to see it.
 {
     "resource_count": 15,
     "link_count": 45,
-    "resources": {
-        "http://antoine.im": {
+    "resources": [
+        {
+            "url": "http://antoine.im/posts/dynamic_programming_for_the_lazy",
             "refered_by": [
-                "http://antoine.im/posts/someone_was_right_on_the_internet",
-                "http://antoine.im/posts/someone_is_wrong_on_the_internet",
-                "http://antoine.im/posts/the_story_of_select_and_the_goroutines",
-                "http://antoine.im/posts/dynamic_programming_for_the_lazy",
-                "http://antoine.im/posts/to_buffer_or_not_to_buffer",
-                "http://antoine.im/posts/correction_hacks"
+                "http://antoine.im"
             ],
             "refers_to": [
-                "http://antoine.im/posts/someone_was_right_on_the_internet",
-                "http://antoine.im/posts/someone_is_wrong_on_the_internet",
-                "http://antoine.im/posts/the_story_of_select_and_the_goroutines",
-                "http://antoine.im/posts/dynamic_programming_for_the_lazy",
-                "http://antoine.im/posts/to_buffer_or_not_to_buffer",
-                "http://antoine.im/posts/correction_hacks",
+                "http://antoine.im",
                 "http://antoine.im/assets/css/brog.css",
                 "http://antoine.im/assets/css/font-awesome.min.css",
                 "http://antoine.im/assets/css/styles/github.css",
+                "http://antoine.im/assets/js/algo_convenience_hacks.js",
                 "http://antoine.im/assets/js/brog.js"
             ],
             "status_code": 200
         },
-        "http://antoine.im/assets/css/brog.css": {
+        {
+            "url": "http://antoine.im/assets/css/brog.css",
             "refered_by": [
                 "http://antoine.im",
                 "http://antoine.im/posts/someone_was_right_on_the_internet",

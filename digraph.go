@@ -90,11 +90,15 @@ func (d *digraph) Walk(walker func(string, int, []string, []string) bool) {
 }
 
 func (d *digraph) MarshalJSON() ([]byte, error) {
+	var nodes []*resource
+	for _, node := range d.nodes {
+		nodes = append(nodes, node)
+	}
 	return json.Marshal(struct {
-		ResourceCount int                  `json:"resource_count"`
-		LinkCount     int                  `json:"link_count"`
-		Resources     map[string]*resource `json:"resources"`
-	}{d.ResourceCount(), d.LinkCount(), d.nodes})
+		ResourceCount int         `json:"resource_count"`
+		LinkCount     int         `json:"link_count"`
+		Resources     []*resource `json:"resources"`
+	}{d.ResourceCount(), d.LinkCount(), nodes})
 }
 
 func (d *digraph) contains(v string) bool {
@@ -140,8 +144,14 @@ func newResource(link string) *resource {
 
 func (r *resource) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
+		URL       string   `json:"url"`
 		ReferedBy []string `json:"refered_by"`
 		RefersTo  []string `json:"refers_to"`
 		Status    int      `json:"status_code"`
-	}{r.referedBy.Slice(), r.refersTo.Slice(), r.status})
+	}{
+		r.link,
+		r.referedBy.Slice(),
+		r.refersTo.Slice(),
+		r.status,
+	})
 }
