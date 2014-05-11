@@ -1,0 +1,129 @@
+header {
+    padding: 0px, 0px;
+    text-align: center;
+    vertical-align: middle;
+    top: 0;
+    left: 0;
+    width:100%;}
+
+header h1 {
+    color: #535353; }
+
+#content {
+    width:80%;
+    margin:0 auto;
+    text-align:left; }
+
+footer {
+    padding: 0px, 0px;
+    text-align: center;
+    vertical-align: middle;
+    line-height: normal;
+    bottom: 0px;
+    width: 100%;
+    font-size: 10pt;
+    color: #999; }
+
+body {
+    text-align: center;
+    margin: 0;
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    padding: 50px 50px; }
+
+h1 {
+    color: #444; }
+
+h2 {
+    color: #666; }
+
+h2 a {
+    color: #666;
+    text-decoration: none; }
+
+
+blockquote {
+    font-style: italic; }
+
+img {
+    display: block;
+    margin-left: auto;
+    margin-right: auto }
+
+/*Code styling*/
+
+pre,
+code {
+    font-family: Menlo, monospace;
+    font-size: 14px;
+}
+pre {
+    line-height: 18px;
+}
+pre .comment {
+    color: #006600;
+}
+pre .highlight,
+pre .highlight-comment,
+pre .selection-highlight,
+pre .selection-highlight-comment {
+    background: #FFFF00;
+}
+pre .selection,
+pre .selection-comment {
+    background: #FF9632;
+}
+pre .ln {
+    color: #999;
+}
+
+body {
+    color: #222;
+}
+
+pre {
+    background: #e9e9e9;
+    padding: 10px;
+
+    -webkit-border-radius: 5px;
+    -moz-border-radius: 5px;
+    border-radius: 5px;
+}
+
+
+/* Tables */
+table {
+    color: #333;
+    text-align: center;
+    font-family: Helvetica, Arial, sans-serif;
+    /*min-width: 500px;*/
+    border-collapse:
+    collapse; border-spacing: 0;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+td, th {
+    border: 1px solid transparent; /* No more visible border */
+    height: 30px;
+    padding-left: 10px;
+    padding-right: 10px;
+    transition: all 0.3s;  /* Simple transition for hover effect */
+}
+
+th {
+    background: #DFDFDF;  /* Darken header a bit */
+    font-weight: bold;
+}
+
+td {
+    background: #FAFAFA;
+}
+
+/* Cells in even rows (2,4,6...) are one color */
+tr:nth-child(even) td { background: #F1F1F1; }
+
+/* Cells in odd rows (1,3,5...) are another (excludes header cells)  */
+tr:nth-child(odd) td { background: #FEFEFE; }
+
+tr td:hover { background: #888; color: #FFF; } /* Hover cell effect! */

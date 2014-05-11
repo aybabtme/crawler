@@ -1,0 +1,1026 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    
+    <title>Dynamic Programming for the Impatient, Dumb and Lazy Ones</title>
+    <meta name="description" content="So you've got this nice recursive function that you love and cherish, but that's incredibly prohibitive to compute.  How can you keep it and make it much faster?  Dynamic programming is said to be hard; but with enough lazyness, you too can do it.">
+    <meta name="citation_authors" content="Antoine Grondin">
+    
+    
+<link rel="stylesheet" type="text/css" href="../assets/css/brog.css"></link>
+<link rel="stylesheet" type="text/css" href="../assets/css/font-awesome.min.css">
+<link rel="stylesheet" type="text/css" href="../assets/css/styles/github.css">
+
+</head>
+
+<body>
+<header>
+  
+<h1>Antoine Grondin<h1>
+
+</header>
+
+<a href="https://github.com/aybabtme"><i class="fa fa-github-square fa-2x"></i></a>
+<a href="https://twitter.com/AntoineGrondin"><i class="fa fa-twitter fa-2x"></i></a>
+
+<div id="content">
+
+<p>Go back to the <a href="../index.html">index</a>.</p>
+
+<h1>Dynamic Programming for the Impatient, Dumb and Lazy Ones</h1>
+<p>
+    <small>
+      By Antoine Grondin, Tuesday November 12, 2013 -
+      Is there an error in this post?  Submit a fix <a href="https://github.com/aybabtme/antoine.im/">here</a>.
+    </small>
+</p>
+
+<article>
+    <script type="application/javascript" src="../assets/js/algo_convenience_hacks.js"></script>
+
+<blockquote>
+<p>Preambule:  the algorithms in this page are all implemented in Javascript, and your browser is currently using them to generate the numbers you&rsquo;ll see below. Please note that I&rsquo;m not a good Javascript dev and the code I&rsquo;ve written is hackish at best.</p>
+</blockquote>
+
+<h2>You Love Recursion</h2>
+
+<p>Hello Jim, I&rsquo;ve been told that you quite enjoy recursion.</p>
+
+<p>You&rsquo;ve got this nice recursive function that you love and cherish, but oh boy it&rsquo;s an incredibly prohibitive one to compute! How can you keep the little recursive thing and make it much faster?</p>
+
+<p>You&rsquo;ve been told that dynamic programming is the Graal. You&rsquo;ve been told that dynamic programming hard.</p>
+
+<p>However, let me tell you that with enough lazyness, you too can do it while not changing much to your lovely recuring thing.</p>
+
+<h2>The Mighty Change Giving Algorithm</h2>
+
+<p>Your professor Ms. Computer Science gave you a cute little thing.  It&rsquo;s not really important to know what this is supposed to do, but she said it computes the change needed to form an amount $n$ with $10$, $5$ and $1$ cents coins (we trust her with that):</p>
+
+<pre lang="javascript"><code>function getChange(n) {
+    recursiveChange(n, 3) // base case is k=3
+}
+
+// helper
+function recursiveChange (n, k) {
+
+    if (k == 1) return 1;
+
+    var big = 0;
+    if (k == 3) { big = 10; }
+    else        { big = 5;  }
+
+    if (n &lt; big) {
+        return recursiveChange(n, k-1);
+    }
+
+    return recursiveChange(n - big, k) + recursiveChange(n, k-1);
+}
+</code></pre>
+
+<!-- This follows from above -->
+
+<script type="text/javascript">
+function getChange(n) {
+    var start = new Date().getTime();
+    var countOps = 0;
+    function recursiveChange (n, k) {
+        countOps++;
+        if (k == 1) return 1;
+
+        var big = 0;
+        if (k == 3) { big = 10; }
+        else        { big = 5;  }
+
+        if (n < big) {
+            return recursiveChange(n, k-1);
+        }
+
+        return recursiveChange(n - big, k) + recursiveChange(n, k-1);
+    }
+    return {answer: recursiveChange(n, 3),
+            recursions: countOps,
+            time: (new Date().getTime() - start)};
+}
+</script>
+
+<p>Whether the algorithm actually does compute the proper change (or not!) is quite irrelevant to our problem.  We just want to make this thing FASTER!  Fast like a <a href="http://wiki.kerbalspaceprogram.com/wiki/Rockomax_%22Mainsail%22_Liquid_Engine">Rockomax &ldquo;Mainsail&rdquo;</a> rocket engine!</p>
+
+<p>Wow, that&rsquo;s pretty fast!  How are we going to do this, Antoine?</p>
+
+<p>Oh well, I&rsquo;m not too intelligent, but I have a trick!  It&rsquo;s called <strong>lazy loading</strong> and I&rsquo;ve heard it&rsquo;s quite the cool and hip thing.  But first, let&rsquo;s look at how this thing grows!</p>
+
+<script type="text/javascript">
+var t = VerticalTable([
+    "$n$",
+    "Answer",
+    "Recursions done"
+]);
+
+for (var i = 1; i <= 4096; i*= 2) {
+    var r = getChange(i).answer;
+    var rOps = getChange(i).recursions;
+    t.addEntry([
+        math(i),
+        math(r),
+        math(rOps),
+    ]);
+}
+puts(t.toHTML());
+</script>
+
+<p>Well, from the look of it, I&rsquo;d say this is growing pretty FAST!  But that&rsquo;s not the &lsquo;fast&rsquo; we&rsquo;re looking for.  We want this <em>Recursions done</em> column to be little, so that the algorithm itself is <em>FAST</em>!</p>
+
+<blockquote>
+<p>Note : All along the post, I&rsquo;ve assumed that <em>faster</em> means less recursions.  Let&rsquo;s just assume that this is true in this algorithm, shall we?</p>
+</blockquote>
+
+<h2>So What Is Lazy Loading Anyways?</h2>
+
+<p>You might have seen the lazy loading pattern in other shapes.  It&rsquo;s quite used in Java (and everything else!) to avoid loading expensive objects until they&rsquo;re very needed.  Here&rsquo;s an example (the only part of this post that&rsquo;s written) in Java:</p>
+
+<pre lang="Java"><code>// hugeString is huge, so don't store it by default.
+private String hugeString = null;
+
+// People ask for the huge string using this method, always
+public String getHugeString() {
+
+    // If nobody ever asked for hugeString, it's null so we get it
+    if (hugeString == null) {
+        hugeString = Database.getHugeString();
+        // from now on, hugeString is set
+    }
+
+    // In any case, we return hugeString, whether it was already there or not
+    return hugeString;
+}
+</code></pre>
+
+<p>That&rsquo;s pretty simple, right?  Let&rsquo;s see how this applies to our $getChange$ algorithm.</p>
+
+<h2>Identifying Key Informations</h2>
+
+<p>There are a few things you need to <em>just know</em> about dynamic programming.  Here they are:</p>
+
+<h3>1. Thou shall need a multi-dimensional array.</h3>
+
+<p>$$
+    dynamic\ programming \to array
+$$</p>
+
+<p>The answer to <em>question 1</em> is pretty easy: need I use an array?  Yes!</p>
+
+<h3>2. Thou shall know how many dimensions thy array will have, somehow.</h3>
+
+<p>$$
+    array[i][j][k]&hellip;[x]
+$$</p>
+
+<p>Let&rsquo;s look at <em>question 2</em>.  To do that, recall the first part of the algorithm:</p>
+
+<pre lang="javascript"><code>function recursiveChange (n, k) {
+    ...
+}
+</code></pre>
+
+<p>You can see here that function <code>recursiveChange</code> takes two arguments, <code>n</code> and <code>k</code>.  So the answer to <em>question 2</em> is a 2-dimensional array.  That&rsquo;s pretty easy so far.</p>
+
+<h3>3. Thou shall know what size thy dimensions will be, somehow.</h3>
+
+<p>$$\begin{align}
+    i&amp;=something\\
+    j&amp;=somethingElse\\
+    &amp;\cdots \\
+    x&amp;=somethingAtLast
+\end{align}$$</p>
+
+<p>Now, the harder part; <em>question 3</em>.  We need to know how big each argument will be, because that&rsquo;s how big we need to make the dimensions.  So we just look at the code and figure it out with our dumb little brains:</p>
+
+<p>First let&rsquo;s look at the easy one.</p>
+
+<h4>How big will <code>k</code> be?</h4>
+
+<p>We see in the <code>getChange</code> function that <code>k</code> starts with value $3$.</p>
+
+<pre lang="javascript"><code>function getChange(n) {
+    recursiveChange(n, 3) // base case is k=3
+}
+</code></pre>
+
+<p>Now we look if anything in the helper function <code>recursiveChange</code> will ever make <code>k</code> bigger:</p>
+
+<pre lang="javascript"><code>function recursiveChange (n, k) {
+
+    if (k == 1) return 1;
+
+    var big = 0;
+    if (k == 3) { big = 10; }
+    else        { big = 5;  }
+
+    if (n &lt; big) {
+        return recursiveChange(n, k-1);
+    }
+
+    return recursiveChange(n - big, k) + recursiveChange(n, k-1);
+}
+</code></pre>
+
+<p>Nope, never.  So $k\leq3$ in any case.</p>
+
+<h4>How big will <code>n</code> be?</h4>
+
+<p>We know that the algorithm starts with initial value <code>n</code>, then recurses with equal or smaller values than <code>n</code>.  So <code>n</code> will be as big as <code>n</code> is.  This sounds weird, but what it means is that the array will be dynamically sized by a constant <code>3</code> and a varying <code>n</code>.</p>
+
+<h3>Putting it 1, 2 and 3 together.</h3>
+
+<p>So we need a 2-dimensional array of size $n \times 3$.  Let&rsquo;s call this array <code>memo</code>, short for <em>memoization</em>; a fancy term intelligent people use to show that they have a fancy vocabulary.  I use it too, just to feel smart and <em>distingué</em>.  You should do that too from now on.</p>
+
+<pre lang="javascript"><code>memo = new Array(n);
+for (var i = 0; i &lt; memo.length; i++) {
+    memo = new Array(3);
+}
+</code></pre>
+
+<blockquote>
+<p>Note: actually, it&rsquo;s <code>n + 1</code> and <code>3 + 1</code> because prof Ms. Computer Science likes her algorithms 1-indexed.</p>
+</blockquote>
+
+<p>You can clearly see that the <em>space complexity</em> of your yet-to-be-born algorithm will somehow be bounded below by <code>n</code>.  Actually, at least $3n$.  The fancy people say $\Omega(n)$.</p>
+
+<h2>Cool Bro, But Where&rsquo;s My Rockomax-Fast Algorithm?</h2>
+
+<p>Well from now on &lsquo;<em>bro</em>&rsquo;, it will be even easier. Apply the following recipe:</p>
+
+<ul>
+<li>At the beginning of <code>recursiveChange</code>, look into <code>memo</code> if you don&rsquo;t know the answer already.  If not, change nothing.</li>
+</ul>
+
+<pre lang="javascript"><code>if (memo[n][k]) { // we cheat; javascript considers `null` to be false.
+    return memo[n][k];
+}
+</code></pre>
+
+<ul>
+<li>For every recursive call to <code>recursiveChange(i, j)</code>, check if <code>memo[i][j]</code> is known.
+
+<ul>
+<li>If <strong>yes</strong>, return that value instead of doing the recursion.</li>
+<li>If <strong>no</strong>, do the recursive call, but save the value you get back into <code>memo[i][j]</code>.</li>
+</ul></li>
+</ul>
+
+<pre lang="javascript"><code>if ( !memo[i][j] ) {
+    memo[i][j] = recursiveChange(i, j);
+}
+// use `memo[i][j]`
+</code></pre>
+
+<ul>
+<li>When you&rsquo;re about to <code>return</code> the computed value at the very end, save it into <code>memo</code> first.</li>
+</ul>
+
+<pre lang="javascript"><code>memo[i][j] = answer;
+return answer;
+</code></pre>
+
+<h2>The Quasi End Result</h2>
+
+<p>We do as I&rsquo;ve said above, and replace all the access to lazy ones, and save whatever we compute at each step.  Here&rsquo;s the result:</p>
+
+<pre lang="javascript"><code>function getChangeDynamic(n) {
+    var k = 3;
+    // create our memo array
+    var memo = new Array(n);
+    for (var i = 0; i &lt; memo.length; i++) {
+        memo[i] = new Array(k);
+    }
+    // call the recursive function as usual
+    recursiveChange(n, k, memo)
+}
+
+// a helper to clean up the code a bit
+function lazyGet(i, j, memo) {
+    if ( !memo[i][j] ) {
+        memo[i][j] = recursiveChange(i, j, memo);
+    }
+    return memo[i][j];
+}
+
+// Keep the recursive function as is, minus the use of the memoization
+// array, for lazy loading
+function recursiveChange (n, k, memo) {
+
+    if (k === 1) {
+        return 1;
+    }
+
+    // if we know the answer, don't compute anything
+    if ( memo[n][k] ) {
+        return memo[n][k];
+    }
+
+    var big = 0;
+
+    if (k === 3) {
+        big = 10;
+    } else {
+        big = 5;
+    }
+
+    // lazily compute the values
+    if (n &lt; big) {
+        return lazyGet(n, k-1, memo);
+    }
+
+    var withoutBig = lazyGet(n-big, k, memo);
+    var withBig = lazyGet(n, k-1, memo);
+
+    // save answers we have had to compute the long way
+    memo[n][k] = withoutBig + withBig
+    return memo[n][k];
+}
+</code></pre>
+
+<script type="text/javascript">
+// Woa man, you inline Javascript in your HTML jsut like that?  Like, wtf dude?
+// - I don't care, this is my blog.  Wtv.
+
+function getChangeDynamicSlow(n) {
+    var start = new Date().getTime();
+    var k = 3;
+    // create our memo array
+    var memo = new Array(n+1);
+    for (var i = 0; i < memo.length; i++) {
+        memo[i] = new Array(k+1);
+    }
+
+    // a helper to clean up the code a bit
+    function lazyGet(i, j) {
+        if ( !memo[i][j] ) {
+            memo[i][j] = recursiveChange(i, j);
+        }
+        return memo[i][j];
+    }
+
+    var countOps = 0;
+
+    // Keep the recursive function as is, minus the use of the memoization
+    // array, for lazy loading
+    function recursiveChange (n, k) {
+        countOps++;
+        if (k === 1) {
+            return 1;
+        }
+
+        // if we know the answer, don't compute anything
+        if ( memo[n][k] ) {
+            return memo[n][k];
+        }
+
+        var big = 0;
+
+        if (k === 3) {
+            big = 10;
+        } else {
+            big = 5;
+        }
+
+        // lazily compute the values
+        if (n < big) {
+            return lazyGet(n, k-1);
+        }
+
+        var withoutBig = lazyGet(n-big, k);
+        var withBig = lazyGet(n, k-1);
+
+        // save answers we have had to compute the long way
+        memo[n][k] = withoutBig + withBig
+        return memo[n][k];
+    }
+
+    return {answer: recursiveChange(n, k, memo),
+            memo: memo,
+            recursions: countOps,
+            time: (new Date().getTime() - start)}
+}
+</script>
+
+<p>So that was our poor-woman and poor-man universal &lsquo;<em>dynamization</em>&rsquo; technique: use the plain recursive algorithm, and plug in some lazy-loading everywhere.  Is this cheating?  No it&rsquo;s not.  Is this a elegant way?  Hmm maybe, maybe not&hellip; but it works incredibly well!</p>
+
+<h2>Show Me The Mumbers!</h2>
+
+<p>Starting off, &lsquo;mumbers&rsquo; is not a word.  Now that this is out of the way, let&rsquo;s indeed look at some numbers.  We will want to look at two things:</p>
+
+<ul>
+<li><strong>The computed answer</strong>: we want to make sure our algorithm is still computing the right thing, don&rsquo;t you agree?</li>
+<li><strong>The number of recursions</strong>: we want to see if we&rsquo;ve made the thing faster.</li>
+</ul>
+
+<p>I&rsquo;ve copy-pasted the algorithm above with some minor changes into the HTML of this page.  Along with some helpers, I&rsquo;m now saying this:</p>
+
+<blockquote>
+<p>&ldquo;Javascript, compute thy numbers!!!&rdquo;</p>
+</blockquote>
+
+<p>Here it goes :</p>
+
+<script type="text/javascript">
+var t = VerticalTable([
+    "$n$",
+    "Original($n$)",
+    "Dynamic($n$)",
+    "Original recursions",
+    "Dynamic recursions"
+]);
+
+for (var i = 0; i <= 20; i++) {
+    var r = getChange(i).answer;
+    var rOps = getChange(i).recursions;
+    var d = getChangeDynamicSlow(i).answer;
+    var dOps = getChangeDynamicSlow(i).recursions;
+    t.addEntry([
+        math(i),
+        math(r),
+        math(d),
+        math(rOps),
+        math(dOps),
+    ]);
+}
+
+for (var i = 40; i <= 4096; i*= 2) {
+    var r = getChange(i).answer;
+    var rOps = getChange(i).recursions;
+    var d = getChangeDynamicSlow(i).answer;
+    var dOps = getChangeDynamicSlow(i).recursions;
+    t.addEntry([
+        math(i),
+        math(r),
+        math(d),
+        math(rOps),
+        math(dOps),
+    ]);
+}
+puts(t.toHTML());
+</script>
+
+<h1>If You Are Truly Lazy, Stop There.</h1>
+
+<p>That was it.</p>
+
+<h1>If You Want Faster Than A Rockomax, Carry On.</h1>
+
+<p>Now that we&rsquo;ve seen some numbers, we can see a pattern.  The number of operations performed changes only every multiple of $5$.  That should be a hint that there&rsquo;s some wastage going on.</p>
+
+<p>Let&rsquo;s see what the <code>memo</code> array looks like.  Now, let me warn you of two things:</p>
+
+<ul>
+<li>I&rsquo;m NOT a javascript ninja.</li>
+<li>This code is most likely insane.</li>
+<li>I&rsquo;m not saying that this is the best possible algorithm, and I don&rsquo;t care about the best possible algorithm to <em>~compute change~</em>.</li>
+<li>What follows assume you have a bit more of a brain that the previous part.  Which means, I won&rsquo;t do lengthy explanations of every line.</li>
+</ul>
+
+<p>That was not two but four things, great!  Carry on.</p>
+
+<p>Let&rsquo;s abuse Javascript a little bit and instrument our <code>memo</code> array to make it more convenient to work with.  Please close your eyes:</p>
+
+<pre lang="javascript"><code>var memo = new Array(n+1);
+for (var i = 0; i &lt; memo.length; i++) {
+    memo[i] = new Array(k+1);
+};
+
+memo.lazyGet = function(i, j) {
+
+    if (!this[i][j]) {
+        this[i][j] = getChangeDynamic(i, j);
+    }
+    return this[i][j];
+}
+
+memo.get = function(i, j) {
+    return this[i][j];
+}
+
+memo.set = function(i, j, val) {
+    this[i][j] = val
+    return val; // for chaining
+}
+</code></pre>
+
+<p>Alright, now it will be easier to hack around the algorithm and change things.</p>
+
+<h2>Show Me More Numbers!</h2>
+
+<p>We want to see more data!  Looking at the <code>memo</code> array for some $n$, we see this:</p>
+
+<!-- Wow man, wtf this is insane, why u do this? -->
+
+<table>
+<script type="text/javascript">
+
+var n = 21;
+var dynamicSlowWith21 = getChangeDynamicSlow(n);
+
+var memo = dynamicSlowWith21.memo;
+
+for (var i = 0; i < memo.length; i++) {
+    if (i === 0) {
+        puts("<tr><th>$n="+n+"$ </th>")
+        for (var j = 0; j < memo[i].length; j++) {
+            puts("<th>"+j+"</th>");
+        };
+        puts("</th>")
+    }
+    puts("<tr>");
+    puts("<th>"+i+"</th>");
+    for (var j = 0; j < memo[i].length; j++) {
+        puts("<td>"+memo[i][j]+"</td>");
+    };
+    puts("</tr>");
+};
+</script>
+</table>
+
+<p>This thing is filled with unused cells!</p>
+
+<p>We can see that indeed, every non multiple of $5$ is unused.  We can thus change every access to the <code>memo</code> array to only use multiples of $5$, like this:</p>
+
+<pre lang="javascript"><code>var len = Math.floor(n/5) + 1 // 1-indexed
+var memo = new Array(len);
+for (var i = 0; i &lt; memo.length; i++) {
+    memo[i] = new Array(3 + 1); // 1-indexed
+};
+
+memo.lazyGet = function(i, j) {
+    var realI = Math.floor(i/5);
+
+    if (!this[realI][j]) {
+        this[realI][j] = getChangeDynamic(i, j);
+    }
+    return this[realI][j];
+}
+
+memo.get = function(i, j) {
+    var realI = Math.floor(i/5);
+    return this[realI][j];
+}
+
+memo.set = function(i, j, val) {
+    var realI = Math.floor(i/5);
+    this[realI][j] = val
+    return val; // for chaining
+}
+</code></pre>
+
+<script>
+
+function getChangeDynamicMultiple5(n) {
+
+    var len = Math.floor(n/5)
+    var memo = new Array(len + 1);
+    for (var i = 0; i < memo.length; i++) {
+        memo[i] = new Array(4);
+    };
+
+    memo.lazyGet = function(i, j) {
+        var realI = Math.floor(i/5);
+
+        if (!this[realI][j]) {
+            this[realI][j] = lambda(i, j);
+        }
+        return this[realI][j];
+    }
+
+    memo.get = function(i, j) {
+        var realI = Math.floor(i/5);
+
+        var row = this[realI];
+        if (!row) { return null; }
+        return row[j];
+    }
+
+    memo.set = function(i, j, val) {
+        var realI = Math.floor(i/5);
+        this[realI][j] = val
+        return val; // for chaining
+    }
+
+    var recurCount = 0;
+
+    function lambda (n, k) {
+        if (k === 1) {
+            return 1;
+        }
+
+        if ( memo.get(n,k) ) {
+            return memo.get(n,k);
+        }
+
+        recurCount++;
+
+
+        var big = 0;
+
+        if (k === 3) {
+            big = 10;
+        } else {
+            big = 5;
+        }
+
+        if (n < big) {
+            return memo.lazyGet(n, k-1);
+        }
+
+        var withoutBig = memo.lazyGet(n-big, k);
+        var withBig = memo.lazyGet(n, k-1);
+
+        return memo.set(n,k, withoutBig + withBig);
+    }
+
+    return {answer: lambda(n, 3), memo: memo, recursions: recurCount}
+}
+</script>
+
+<p>Let&rsquo;s look at the result :</p>
+
+<table>
+<script type="text/javascript">
+
+var n = 21;
+var dynamicMultiple5 = getChangeDynamicMultiple5(n);
+
+var memo = dynamicMultiple5.memo;
+
+for (var i = 0; i < memo.length; i++) {
+    if (i === 0) {
+        puts("<tr><th>$n="+n+"$ </th>")
+        for (var j = 0; j < memo[i].length; j++) {
+            puts("<th>"+j+"</th>");
+        };
+        puts("</th>")
+    }
+    puts("<tr>");
+    puts("<th>"+i+"</th>");
+    for (var j = 0; j < memo[i].length; j++) {
+        puts("<td>"+memo[i][j]+"</td>");
+    };
+    puts("</tr>");
+};
+</script>
+</table>
+
+<p>Wow, that&rsquo;s much better!  But we still see there&rsquo;s a lot of extra <code>undefined</code>.  Let&rsquo;s remove it by making <code>memo</code> $n \times k-1$, and redirecting all the accesses from <code>j</code> to <code>j-1</code>:</p>
+
+<pre lang="javascript"><code>var len = Math.floor(n/5) + 1
+var memo = new Array(len);
+for (var i = 0; i &lt; memo.length; i++) {
+    memo[i] = new Array(3);  // remove the extra 1
+};
+
+memo.lazyGet = function(i, j) {
+    var realI = Math.floor(i/5);
+
+    if (!this[realI][j-1]) {
+        this[realI][j-1] = getChangeDynamic(i, j);
+    }
+    return this[realI][j-1];
+}
+
+memo.get = function(i, j) {
+    var realI = Math.floor(i/5);
+    return this[realI][j-1];
+}
+
+memo.set = function(i, j, val) {
+    var realI = Math.floor(i/5);
+    this[realI][j-1] = val
+    return val; // for chaining
+}
+</code></pre>
+
+<script type="text/javascript">
+function getChangeDynamicLessOneCol(n) {
+
+    var len = Math.floor(n/5)
+    var memo = new Array(len + 1);
+    for (var i = 0; i < memo.length; i++) {
+        memo[i] = new Array(3);
+    };
+
+    memo.lazyGet = function(i, j) {
+        var realI = Math.floor(i/5);
+
+        if (!this[realI][j-1]) {
+            this[realI][j-1] = lambda(i, j);
+        }
+        return this[realI][j-1];
+    }
+
+    memo.get = function(i, j) {
+        var realI = Math.floor(i/5);
+
+        var row = this[realI];
+        if (!row) { return null; }
+        return row[j-1];
+    }
+
+    memo.set = function(i, j, val) {
+        var realI = Math.floor(i/5);
+        this[realI][j-1] = val
+        return val; // for chaining
+    }
+
+    var recurCount = 0;
+
+    function lambda (n, k) {
+        if (k === 1) {
+            return 1;
+        }
+
+        if ( memo.get(n,k) ) {
+            return memo.get(n,k);
+        }
+
+        recurCount++;
+
+
+        var big = 0;
+
+        if (k === 3) {
+            big = 10;
+        } else {
+            big = 5;
+        }
+
+        if (n < big) {
+            return memo.lazyGet(n, k-1);
+        }
+
+        var withoutBig = memo.lazyGet(n-big, k);
+        var withBig = memo.lazyGet(n, k-1);
+
+        return memo.set(n,k, withoutBig + withBig);
+    }
+
+    return {answer: lambda(n, 3),
+            memo: memo,
+            recursions: recurCount}
+}
+</script>
+
+<p>Let&rsquo;s look at the result :</p>
+
+<table>
+<script type="text/javascript">
+
+var n = 21;
+var dynamicLessOneCol = getChangeDynamicLessOneCol(n);
+
+var memo = dynamicLessOneCol.memo;
+
+for (var i = 0; i < memo.length; i++) {
+    if (i === 0) {
+        puts("<tr><th>$n="+n+"$ </th>")
+        for (var j = 0; j < memo[i].length; j++) {
+            puts("<th>"+j+"</th>");
+        };
+        puts("</th>")
+    }
+    puts("<tr>");
+    puts("<th>"+i+"</th>");
+    for (var j = 0; j < memo[i].length; j++) {
+        puts("<td>"+memo[i][j]+"</td>");
+    };
+    puts("</tr>");
+};
+</script>
+</table>
+
+<p>Cleaned-up that undefined column!</p>
+
+<p>Now we see those silly entries that are invariably $1$.  Let&rsquo;s get rid of them:</p>
+
+<pre lang="javascript"><code>var len = Math.floor(n/5)
+var memo = new Array(len);   // removed the extra 1
+for (var i = 0; i &lt; memo.length; i++) {
+    memo[i] = new Array(3-1); // removed the extra 1
+};
+
+memo.lazyGet = function(i, j) {
+    var realI = Math.floor(i/5) - 1;
+
+    // add cases where answer is invariably 1
+    if (realI == -1) { return 1;} // realI will be -1 for access to entry 0
+    if (j == 1)      { return 1;}
+
+    if (!this[realI][j-2]) {
+        this[realI][j-2] = getChangeDynamic(i, j);
+    }
+    return this[realI][j-2];
+}
+
+memo.get = function(i, j) {
+    var realI = Math.floor(i/5) - 1;
+
+    var row = this[realI];
+    if (!row) { return null; }
+    return row[j-2];
+}
+
+memo.set = function(i, j, val) {
+    var realI = Math.floor(i/5);
+    this[realI-1][j-2] = val
+    return val; // for chaining
+}
+</code></pre>
+
+<script>
+
+function getChangeDynamic(n) {
+    var start = new Date().getTime();
+    var len = Math.floor(n/5)
+    var memo = new Array(len);
+    for (var i = 0; i < memo.length; i++) {
+        memo[i] = new Array(2);
+    };
+
+    memo.lazyGet = function(i, j) {
+        var realI = Math.floor(i/5) - 1;
+
+        if (realI == -1) { return 1;}
+        if (j == 1)     { return 1;}
+
+        if (!this[realI][j-2]) {
+            this[realI][j-2] = lambda(i, j);
+        }
+        return this[realI][j-2];
+    }
+
+    memo.get = function(i, j) {
+        var realI = Math.floor(i/5) - 1;
+
+        var row = this[realI];
+        if (!row) { return null; }
+        return row[j-2];
+    }
+
+    memo.set = function(i, j, val) {
+        var realI = Math.floor(i/5);
+        this[realI-1][j-2] = val
+        return val; // for chaining
+    }
+
+    var recurCount = 0;
+
+    function lambda (n, k) {
+        if (k === 1) {
+            return 1;
+        }
+
+        if ( memo.get(n,k) ) {
+            return memo.get(n,k);
+        }
+
+        recurCount++;
+
+
+        var big = 0;
+
+        if (k === 3) {
+            big = 10;
+        } else {
+            big = 5;
+        }
+
+        if (n < big) {
+            return memo.lazyGet(n, k-1);
+        }
+
+        var withoutBig = memo.lazyGet(n-big, k);
+        var withBig = memo.lazyGet(n, k-1);
+
+        return memo.set(n,k, withoutBig + withBig);
+    }
+
+    return {answer: lambda(n, 3),
+            memo: memo,
+            recursions: recurCount,
+            time: (new Date().getTime() - start)}
+}
+</script>
+
+<p>And at last, let&rsquo;s look at the resulting table:</p>
+
+<table>
+<script type="text/javascript">
+
+var nIs20 = getChangeDynamic(21);
+
+var memo = nIs20.memo;
+
+for (var i = 0; i < memo.length; i++) {
+    if (i === 0) {
+        puts("<tr><th></th>")
+        for (var j = 0; j < memo[i].length; j++) {
+            puts("<th>"+j+"</th>");
+        };
+        puts("</th>")
+    }
+    puts("<tr>");
+    puts("<th>"+i+"</th>");
+    for (var j = 0; j < memo[i].length; j++) {
+        puts("<td>"+memo[i][j]+"</td>");
+    };
+    puts("</tr>");
+};
+</script>
+</table>
+
+<h2>How Is This Better Than The First Algorithm?</h2>
+
+<p>Let&rsquo;s compare the original algorithm with the initial dynamic algorithm and this new, shiny one.  We compare it&rsquo;s values with the original recursive only algorithm, but we omit the initial dynamic version (we&rsquo;ve already shown it equivalent).</p>
+
+<p><button id="long_computation">Compute this expensive table!</button></p>
+
+<div id="expensive_table"></div>
+
+<script type="text/javascript">
+document.getElementById("long_computation").onclick = function() {
+    var t = VerticalTable([
+        "$n$",
+        "Recursive",
+        "Dynamic Fast",
+        "Original cost",
+        "Dynamic slow cost",
+        "Dynamic fast cost",
+        "Original $dT$",
+        "Dynamic slow $dT$",
+        "Dynamic fast $dT$"
+    ]);
+    for (var i = 1; i <= 40000; i*= 2) {
+        var r = getChange(i);
+        var d = getChangeDynamicSlow(i);
+        var dFast = getChangeDynamic(i);
+        t.addEntry([
+            math(i),
+            math(r.answer),
+            math(dFast.answer),
+            math(r.recursions),
+            math(d.recursions),
+            math(dFast.recursions),
+            r.time + "ms",
+            d.time + "ms",
+            dFast.time + "ms"
+        ]);
+    }
+    document.getElementById("expensive_table").innerHTML = t.toHTML();
+    var table = document.getElementById("expensive_table");
+    MathJax.Hub.Queue(["Typeset",MathJax.Hub,table]);
+
+};
+
+</script>
+
+<p>Yep, much better!  Both the initial <code>getDynamicChange</code> and the optimized one are growing by a factor of $n$.  However, the inital one grows by $n/2$ while the optimized one grows by $n/4$.  It&rsquo;s a 100% speed-up.</p>
+
+<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+<script type="text/javascript">
+// Single $ for inline LaTeX
+MathJax.Hub.Config({
+  tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}
+});
+</script>
+
+</article>
+
+</div>
+<footer>
+© Antoine Grondin, 2014
+</footer>
+
+<script type="text/javascript" src="../assets/js/brog.js"></script>
+
+
+<!-- Code Highlighting -->
+<!--
+<script type="text/javascript" src="/assets/js/highlight.min.js"></script>
+<script type="text/javascript">
+// Please do highlight my code.
+hljs.initHighlightingOnLoad();
+</script>
+-->
+<!-- Google Analytics -->
+<script>
+(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+ga('create', 'UA-45729425-1', 'antoine.im');
+ga('send', 'pageview');
+</script>
+
+</body>
+
+</html>

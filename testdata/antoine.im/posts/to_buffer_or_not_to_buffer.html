@@ -1,0 +1,218 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    
+    <title>On Files: To Buffer Or Not To Buffer</title>
+    <meta name="description" content="How should I read or write to a file? Buffering, what is buffering?">
+    <meta name="citation_authors" content="Antoine Grondin">
+    
+    
+<link rel="stylesheet" type="text/css" href="../assets/css/brog.css"></link>
+<link rel="stylesheet" type="text/css" href="../assets/css/font-awesome.min.css">
+<link rel="stylesheet" type="text/css" href="../assets/css/styles/github.css">
+
+</head>
+
+<body>
+<header>
+  
+<h1>Antoine Grondin<h1>
+
+</header>
+
+<a href="https://github.com/aybabtme"><i class="fa fa-github-square fa-2x"></i></a>
+<a href="https://twitter.com/AntoineGrondin"><i class="fa fa-twitter fa-2x"></i></a>
+
+<div id="content">
+
+<p>Go back to the <a href="../index.html">index</a>.</p>
+
+<h1>On Files: To Buffer Or Not To Buffer</h1>
+<p>
+    <small>
+      By Antoine Grondin, Thursday November 7, 2013 -
+      Is there an error in this post?  Submit a fix <a href="https://github.com/aybabtme/antoine.im/">here</a>.
+    </small>
+</p>
+
+<article>
+    <h2>Summary</h2>
+
+<p>Here, I&rsquo;ll review quickly and roughly how files work.  Then I&rsquo;ll show some experimental data to explain what are buffered reads and writes.</p>
+
+<p>If you know this stuff, you can just skip the text and look at the graphs, they&rsquo;re nice looking.</p>
+
+<h2>Review of file mechanics</h2>
+
+<p>When accessing a file, you typically obtain a sort of socket, or <em>stream</em>, or file descriptor, from which to read or write.  Normally, a file has a beginning and an end.</p>
+
+<p>In general, the process of dealing with files goes like this :</p>
+
+<ul>
+<li>Ask the OS to <strong>create</strong> or <strong>open</strong> a certain file.  Depending on the programming environment, you will get various things that represent that file.</li>
+<li>Use that <em>thing</em> to <strong>write</strong> and <strong>read</strong> from the file in question.</li>
+<li>You can read and write in two fashion:
+
+<ul>
+<li>Sequentialy : you start from the beginning and you carry on until the end.</li>
+<li>Randomly : you start from anywhere and jump to anywhere into the file.</li>
+</ul></li>
+<li>When you&rsquo;re done, tell the OS that you wish to <strong>close</strong> that file.</li>
+</ul>
+
+<p>Now, let&rsquo;s see that in code.  Here&rsquo;s a pseudo workflow (imagine that I&rsquo;m handling the errors), starting by opening the file:</p>
+
+<pre lang="go"><code>file, err := os.Open(&quot;myfile.data&quot;)  // or os.Create(...)
+
+// Sequential access operations
+myData := make([]byte, dataLen)
+n, err := file.Write(myData)
+
+yourData := make([]byte, dataLen)
+m, err := file.Read(yourData)
+
+// Random access operations
+var offset int64 = 42
+
+myData := make([]byte, dataLen)
+n, err := file.WriteAt(myData, offset)
+
+yourData := make([]byte, dataLen)
+m, err := file.ReadAt(yourData, offset)
+</code></pre>
+
+<p>We will not concern ourselves with <em>random accesses</em> for this post, because they come with their own performance issues.</p>
+
+<p>You notice that each time we <code>Read</code> or <code>Write</code> with a file, we need to provide a piece of memory which the file will read from or write to.  Oddly, the methods are taking arrays of bytes <code>[]byte</code>.  That implies that somehow, we need to create a <code>[]byte</code> of some size.  But what size?  What if you don&rsquo;t know the size of what you&rsquo;re about to read?  Can you just pass an array of size 1 and access every part of the file one byte at a time?  Sure you can do that, but it might be a bad idea.</p>
+
+<pre lang="go"><code>yourData := make([]byte, 1)
+n, err := file.Read(yourData)
+// do something with yourData[0]
+</code></pre>
+
+<p>Alright, so if it&rsquo;s a bad idea, how do we read a file for which we don&rsquo;t know the size in advance?  What if I read the next 4 bytes but there were only 2 bytes left to read?</p>
+
+<p>Let&rsquo;s remember how we read some part of <code>file</code> into <code>yourData</code>:</p>
+
+<pre lang="go"><code>n, err := file.Read(yourData)
+// do something with yourData[:n]
+</code></pre>
+
+<p>In Go, <code>yourData[:n]</code> means everything in <code>yourData</code> up to <code>n - 1</code>. Notice that we don&rsquo;t use <em>all</em> of <code>yourData</code>.  We only use how much <code>Read</code> said was put into <code>yourData</code>. That is, <code>n</code> bytes.</p>
+
+<p>That&rsquo;s much more burden onto you, isn&rsquo;t it?  Now you need to remember not to use all of <code>yourData</code> but only its <code>n</code>th first values.  Why would you do that?</p>
+
+<h2>Performance!</h2>
+
+<p>Alright, alright.  &ldquo;<em>Premature optimization is the root of all evil.</em>&rdquo; Sure it is, but in our case, it&rsquo;s not so much premature.  Disk IO is one of the most expensive thing your computer does.  Like, orders of magnitude more expensive than any other operation on your machine&hellip; aside perhaps network accesses.  So doing your file access <em>right</em> is kind of essential if you want to have somehow acceptable performance.</p>
+
+<p>So, why should we read many bytes at once instead of one at a time?  Let&rsquo;s look at this graph, measured on my MacBook Pro<sub>1</sub>:</p>
+
+<p><img src="../assets/data/to_buffer_or_not_to_buffer/mbpr_256GB_ssd_bench_1.0MB.svg" alt="Read/Write speed for a file of 1.0MB" title="As the size of the data increases, the speed of access also increase" />
+</p>
+
+<p>In the above graph, we see that as $access\ size$ increases, the time it takes to read a 1 MB file decreases.  And this decrease is exponential (see the two logarithm scales).</p>
+
+<p>So this is on my fast SSD.  But your regular, cheap-o web instance won&rsquo;t have a fast SSD (or most likely not), so what will performance look like?  Well, even worst !  Let&rsquo;s look at the same benchmark run on an <a href="http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/concepts_micro_instances.html">AWS EC2 t1.micro instance</a>:</p>
+
+<p><img src="../assets/data/to_buffer_or_not_to_buffer/t1_micro_bench_1.0MB.svg" alt="Read/Write speed for a file of 1.0MB" title="The same relation but on a T1 Micro instance." />
+</p>
+
+<p>You can see that for accesses using small buffers, the decrease in performance is 10 times that of my laptop SSD, while with buffering, the difference is not as significant (although the instance&rsquo;s disk - an <a href="https://aws.amazon.com/ebs/">EBS</a> - has pretty terrible performances).</p>
+
+<p>So, I hope you&rsquo;re convinced now of the importance of doing buffered disk accesses.</p>
+
+<h2>Sum It Up</h2>
+
+<p>How to do buffered reads and writes (ignoring all error handling):</p>
+
+<pre lang="go"><code>buf := bytes.NewBuffer(nil)
+// Choose a decent size, the Go standard lib defines bytes.MinRead
+pageSize := bytes.MinRead
+data := make([]byte, pageSize)
+n, _ := file.Read(data)
+
+m, err := buf.Write(data[:n])
+if err == io.EOF {
+    // We're done reading, buf contains everything
+}
+</code></pre>
+
+<p>Here I only handle <code>err</code> to check for the <code>io.EOF</code> that is returned when there is no more data to be read from the file.  When you implement your own file logic in Go, do three things:</p>
+
+<ul>
+<li>Handle all of your errors</li>
+<li>If you just want all the bytes, use <a href="http://golang.org/pkg/io/ioutil/#ReadAll"><code>ioutil.ReadAll(...)</code></a></li>
+<li>If you want to do something in real time with the data (decode its JSON content, gunzip it on the fly, &hellip;), don&rsquo;t consume the actual data byte by byte.  Instead, chain it with decoders:</li>
+</ul>
+
+<pre lang="go"><code>file, err := os.Open(...)
+gzRd, err := gzip.NewReader(file)
+jsonDec, err := json.NewDecoder(gzRd)
+
+for {
+    err := jsonDec.Decode(&amp;yourStruct)
+    if err == io.EOF {
+        // We're done
+    }
+}
+</code></pre>
+
+<p>In three line, you made an on-the-fly gzip JSON decoder.  Go is pretty awesome.</p>
+
+<h2>Run It Yourself</h2>
+
+<p>The <a href="https://gist.github.com/aybabtme/7348714">code to generate these graph</a> is on my <a href="https://github.com/aybabtme/">Github</a>.</p>
+
+<p>Please note that the code is written in a script-alike way with very bad error handling.  Also, the IO code is pretty weird because of the need to compute time measurements and artificially write with various buffer size.</p>
+
+<p>This is not idiomatic, good Go code.</p>
+
+<h2>Next</h2>
+
+<p>Right now, I don&rsquo;t have a post on the <em>random access</em> side of the picture.  The day might come where I will write such a post.</p>
+
+<p><sub>1: Retina, Mid 2012 with 256GB SSD</sub></p>
+
+<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+<script type="text/javascript">
+// Single $ for inline LaTeX
+MathJax.Hub.Config({
+  tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}
+});
+</script>
+
+</article>
+
+</div>
+<footer>
+© Antoine Grondin, 2014
+</footer>
+
+<script type="text/javascript" src="../assets/js/brog.js"></script>
+
+
+<!-- Code Highlighting -->
+<!--
+<script type="text/javascript" src="/assets/js/highlight.min.js"></script>
+<script type="text/javascript">
+// Please do highlight my code.
+hljs.initHighlightingOnLoad();
+</script>
+-->
+<!-- Google Analytics -->
+<script>
+(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+ga('create', 'UA-45729425-1', 'antoine.im');
+ga('send', 'pageview');
+</script>
+
+</body>
+
+</html>

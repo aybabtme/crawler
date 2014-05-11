@@ -1,0 +1,613 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+
+    <title>Someone's Right! Building a queue: list or slices?</title>
+    <meta name="description" content="Should you use a slice or a list to build a queue? Your CS textbook says that linked lists are better, is this true?">
+    <meta name="citation_authors" content="Antoine Grondin">
+
+
+<link rel="stylesheet" type="text/css" href="../assets/css/brog.css"></link>
+<link rel="stylesheet" type="text/css" href="../assets/css/font-awesome.min.css">
+<link rel="stylesheet" type="text/css" href="../assets/css/styles/github.css">
+
+</head>
+
+<body>
+<header>
+
+<h1>Antoine Grondin<h1>
+
+</header>
+
+<a href="https://github.com/aybabtme"><i class="fa fa-github-square fa-2x"></i></a>
+<a href="https://twitter.com/AntoineGrondin"><i class="fa fa-twitter fa-2x"></i></a>
+
+<div id="content">
+
+<p>Go back to the <a href="../index.html">index</a>.</p>
+
+<h1>Someone's Right! Building a queue: list or slices?</h1>
+<p>
+    <small>
+      By Antoine Grondin, Tuesday April 29, 2014 -
+      Is there an error in this post?  Submit a fix <a href="https://github.com/aybabtme/antoine.im/">here</a>.
+    </small>
+</p>
+
+<article>
+    <p>In a previous post, I was troubled about a claim that was contrary to my
+instincts; whether <a href="/posts/someone_is_wrong_on_the_internet.html">membership testing</a>
+was faster using slices or maps, for small $N$.  I thought the individual
+proclaiming such things was wrong, but was self-critical enough to consider
+being wrong. After testing the claims, my intuitions were confirmed.</p>
+
+<h2>A new challenge to my intuitions</h2>
+
+<p>A situation of this kind occured again, this time after reading
+<a href="https://twitter.com/tv">Tv</a> hating on <a href="http://golang.org/pkg/container/list/"><code>container/list</code></a>
+for a second or third time. He&rsquo;s a smart guy so I tend to believe him when he says :</p>
+
+<blockquote>
+<p>Let me put it this way: it&rsquo;s actually hard to make a more wasteful data
+structure than <code>container/list</code>.  Even for listy operations,
+<code>container/list</code> is pretty much the worst possible thing. Here&rsquo;s some
+keywords to read up on: &ldquo;cacheline&rdquo;, &ldquo;pipeline stall&rdquo;, &ldquo;branch prediction&rdquo;.</p>
+
+<p>&ndash; Tv on <a href="https://botbot.me/freenode/go-nuts/msg/14004767/">#go-nuts</a></p>
+</blockquote>
+
+<p>Those look like plausible, convincing words&hellip; but I&rsquo;m hard to convince: this
+goes against my instinct and what I&rsquo;ve read before. So it&rsquo;s worth verifying.
+At least to get a feel for it: see if it&rsquo;s true or not, to see just how similar or
+different they are.</p>
+
+<p>Even more plausible and drastic <em>numbers</em> are from <a href="https://github.com/cespare">Caleb Spare</a> who replaced
+a <code>list.List</code> with a slice in an commit to package <a href="https://github.com/bmizerany/perks"><code>github.com/bmizerany/perks</code></a>,
+(computes approximate quantiles on unbounded data streams):</p>
+
+<blockquote>
+<pre><code>quantile: Replace container/list with a slice
+Better data locality trumps asymptotic behavior in this case.
+
+benchmark                               old ns/op     new ns/op     delta
+BenchmarkQuerySmallEpsilon              44491         6782          -84.76%
+BenchmarkInsertBiasedSmallEpsilon       2641          871           -67.02%
+BenchmarkQuery                          691           306           -55.72%
+BenchmarkInsertBiased                   324           177           -45.37%
+BenchmarkInsertTargetedSmallEpsilon     1016          616           -39.37%
+BenchmarkInsertTargeted                 294           191           -35.03%
+</code></pre>
+
+<p>&ndash; <a href="https://github.com/cespare/perks/commit/456f18a8e50eba8f1ea6d8728e8000072e3b322c">Cespare</a></p>
+</blockquote>
+
+<p>In face of such counter-examples, one can do two things:</p>
+
+<ul>
+<li>Accept them.</li>
+<li>Accept them after writing benchmarks, because <a href="https://en.wikipedia.org/wiki/Not_invented_here">NIH</a>.</li>
+</ul>
+
+<h2>TL;DR</h2>
+
+<p>Slices are much faster than linked list for use as a FIFO.</p>
+
+<p><strong>caveat</strong>: for the benchmarks below, otherwise YMMV.</p>
+
+<h2>On micro benchmarks</h2>
+
+<p>Microbenchmarks like this are pretty useless.  You should definitely not
+take the numbers here and walk away thinking this is the New Truth. Conditions
+will vary, your usage will be different, etc.  The only use you can make of
+these numbers is to have a feel for the difference between the two things tested.</p>
+
+<p>When you ask yourself which of the two is preferable, you will know that:</p>
+
+<ul>
+<li>X has a nicer API than Y.</li>
+<li>I&rsquo;m worried that Y might be more performant.</li>
+<li>Now I know that if it&rsquo;s true, the difference (will/won&rsquo;t) matter.</li>
+</ul>
+
+<h2>Implementing FIFOs, slices vs <code>container/list</code></h2>
+
+<p>The case I wanted to use a queue for was simple:</p>
+
+<ul>
+<li>Queue things to be processed.</li>
+<li>Dequeue them when they&rsquo;re being processed.</li>
+<li>Re-enqueue things when the processing fails.</li>
+<li>Peek at the next thing to process.</li>
+<li>Check if there&rsquo;s anything to process.</li>
+<li>Have in order iterability over the things in the queue. This means I couldn&rsquo;t
+use channels.</li>
+</ul>
+
+<p>I didn&rsquo;t need priorities, deduplication, deletion, etc.  Really, just a queue.</p>
+
+<p>So for testing, I came up with this interface, which fulfils the use case I
+would have.</p>
+
+<pre lang="go"><code>type ThingFIFO interface {
+  Enqueue(thing Thing)
+  Peek() Thing
+  Dequeue() Thing
+  Len() int
+  Empty() bool
+}
+</code></pre>
+
+<h2>Using a slice</h2>
+
+<p>A slice-based FIFO (made with a slice) is pretty easy to implement. First
+of, the data will look like this, where <code>Thing</code> is anything:</p>
+
+<pre lang="go"><code>type ThingVector struct {
+  vec []Thing
+}
+</code></pre>
+
+<p>The idea is to <code>append</code> to a slice when you enqueue:</p>
+
+<pre lang="go"><code>func (t *ThingVector) Enqueue(thing Thing) {
+  t.vec = append(t.vec, thing)
+}
+</code></pre>
+
+<p>&hellip; and reslice the slice when you dequeue.</p>
+
+<pre lang="go"><code>func (t *ThingVector) Dequeue() Thing {
+  // Could be done in a single line, but I find that's clearer
+  d := t.vec[0]
+  t.vec = t.vec[1:]
+  return d
+}
+</code></pre>
+
+<p>The other methods are trivial, but you can have a peek at the whole source on
+my <a href="https://github.com/aybabtme/antoine.im/tree/master/assets/data/fifobench/slice_fifo.go">Github</a>.</p>
+
+<h2>Using a list (<code>container/list</code>)</h2>
+
+<p>A queue built using a linked list will also be easy, if perhaps ugly, to
+implement.  Go lacking generics, using <code>container/list</code> means doing type
+assertions over the elements of the list, which is not pretty in the
+opinion of some, where &ldquo;some&rdquo; includes myself.</p>
+
+<p>Using a <code>container/list</code>, it will look like this:</p>
+
+<pre lang="go"><code>type ThingList struct {
+  list *list.List
+}
+
+func NewList() ThingFIFO {
+  return &amp;ThingList{list.New()}
+}
+</code></pre>
+
+<p>To enqueue, put the thing at the end of the queue:</p>
+
+<pre lang="go"><code>func (t *ThingList) Enqueue(thing Thing) {
+  t.list.PushBack(thing)
+}
+</code></pre>
+
+<p>&hellip;and remove the front element when you dequeue:</p>
+
+<pre lang="go"><code>func (t *ThingList) Dequeue() Thing {
+  return t.list.Remove(t.list.Front()).(Thing)
+}
+</code></pre>
+
+<p>Again, the other methods are trivial, but can be found on <a href="https://github.com/aybabtme/antoine.im/tree/master/assets/data/fifobench/list_fifo.go">Github</a>.</p>
+
+<h2>Faceoff</h2>
+
+<p>For each type of implementation, we will test how <code>Enqueue</code> and <code>Dequeue</code> work.
+I don&rsquo;t really care about the other operations since they are obviously constant
+in time.</p>
+
+<p>We will benchmark the different ways to do <strong>enqueuing</strong> using the following code:</p>
+
+<pre lang="go"><code>func Enqueue(b *testing.B, fifo ThingFIFO, dataSize, fifoSize int) {
+  // Reports memory allocations
+  b.ReportAllocs()
+
+  // Create a fifoSize things, each filled with strings of random
+  // data of size dataSize
+  things := NewThings(dataSize, fifoSize)
+
+  // Start measuring here
+  b.ResetTimer()
+  for n := 0; n &lt; b.N; n++ {
+    // For each measurement, enqueue all the things we've prepared
+    for _, thing := range things {
+      fifo.Enqueue(thing)
+    }
+  }
+}
+</code></pre>
+
+<p>and <strong>dequeuing</strong> using this code:</p>
+
+<pre lang="go"><code>func Dequeue(b *testing.B, fifo ThingFIFO, dataSize, fifoSize int) {
+  // Reports memory allocations
+  b.ReportAllocs()
+
+  // Create a fifoSize things, each filled with strings of random
+  // data of size dataSize
+  things := NewThings(dataSize, fifoSize)
+
+  // Stop the timer and reset it, because we only want to
+  // measure the parts where we dequeue
+  b.StopTimer()
+  b.ResetTimer()
+
+  for n := 0; n &lt; b.N; n++ {
+    // Add all the things to the FIFO
+    for _, thing := range things {
+      fifo.Enqueue(thing)
+    }
+
+    // Then start measuring how much time it takes to
+    // dequeue everything
+    b.StartTimer()
+    for _, thing := range things {
+      dq := fifo.Dequeue()
+      if dq != thing {
+        b.FailNow()
+      }
+    }
+    b.StopTimer()
+  }
+}
+
+</code></pre>
+
+<h2>Results!</h2>
+
+<p>For $dataSize = 10$ and $n&gt;=32$, the results follow.  A positive <code>delta</code> means
+the slice is faster than the list.</p>
+
+<p>A queue implemented with slices is always faster than a linked list, by
+a large margin for enqueuing:</p>
+
+<table>
+<thead>
+<tr>
+<th align="left">$n$ enqueues</th>
+<th align="left">slice ns/op</th>
+<th align="left">list ns/op</th>
+<th>delta</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td align="left">32</td>
+<td align="left">3178</td>
+<td align="left">8163</td>
+<td>+156.86%</td>
+</tr>
+
+<tr>
+<td align="left">64</td>
+<td align="left">4787</td>
+<td align="left">14648</td>
+<td>+206.00%</td>
+</tr>
+
+<tr>
+<td align="left">128</td>
+<td align="left">8379</td>
+<td align="left">36881</td>
+<td>+340.16%</td>
+</tr>
+
+<tr>
+<td align="left">256</td>
+<td align="left">16716</td>
+<td align="left">78247</td>
+<td>+368.10%</td>
+</tr>
+
+<tr>
+<td align="left">512</td>
+<td align="left">33742</td>
+<td align="left">145720</td>
+<td>+331.87%</td>
+</tr>
+
+<tr>
+<td align="left">1024</td>
+<td align="left">83273</td>
+<td align="left">310665</td>
+<td>+273.07%</td>
+</tr>
+
+<tr>
+<td align="left">2048</td>
+<td align="left">151004</td>
+<td align="left">543738</td>
+<td>+260.08%</td>
+</tr>
+
+<tr>
+<td align="left">4096</td>
+<td align="left">261446</td>
+<td align="left">936551</td>
+<td>+258.22%</td>
+</tr>
+
+<tr>
+<td align="left">8192</td>
+<td align="left">528281</td>
+<td align="left">2376402</td>
+<td>+349.84%</td>
+</tr>
+
+<tr>
+<td align="left">16384</td>
+<td align="left">1059136</td>
+<td align="left">4421926</td>
+<td>+317.50%</td>
+</tr>
+
+<tr>
+<td align="left">32768</td>
+<td align="left">2096680</td>
+<td align="left">9440943</td>
+<td>+350.28%</td>
+</tr>
+
+<tr>
+<td align="left">65536</td>
+<td align="left">4253232</td>
+<td align="left">14862841</td>
+<td>+249.45%</td>
+</tr>
+
+<tr>
+<td align="left">131072</td>
+<td align="left">10186608</td>
+<td align="left">39377239</td>
+<td>+286.56%</td>
+</tr>
+
+<tr>
+<td align="left">262144</td>
+<td align="left">19282298</td>
+<td align="left">80871856</td>
+<td>+319.41%</td>
+</tr>
+
+<tr>
+<td align="left">524288</td>
+<td align="left">34790846</td>
+<td align="left">183769573</td>
+<td>+428.21%</td>
+</tr>
+
+<tr>
+<td align="left">1048576</td>
+<td align="left">72416166</td>
+<td align="left">292706216</td>
+<td>+304.20%</td>
+</tr>
+
+<tr>
+<td align="left">2097152</td>
+<td align="left">166536357</td>
+<td align="left">594833520</td>
+<td>+257.18%</td>
+</tr>
+</tbody>
+</table>
+
+<p>&hellip;and faster by a non-negligeable margin for dequeuing, which is the case
+we would expect to actually favor lists the most:</p>
+
+<table>
+<thead>
+<tr>
+<th align="left">$n$ dequeues</th>
+<th align="left">slice ns/op</th>
+<th align="left">list ns/op</th>
+<th align="left">delta</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td align="left">32</td>
+<td align="left">950</td>
+<td align="left">1206</td>
+<td align="left">+26.95%</td>
+</tr>
+
+<tr>
+<td align="left">64</td>
+<td align="left">1829</td>
+<td align="left">2389</td>
+<td align="left">+30.62%</td>
+</tr>
+
+<tr>
+<td align="left">128</td>
+<td align="left">3593</td>
+<td align="left">4790</td>
+<td align="left">+33.31%</td>
+</tr>
+
+<tr>
+<td align="left">256</td>
+<td align="left">7023</td>
+<td align="left">9490</td>
+<td align="left">+35.13%</td>
+</tr>
+
+<tr>
+<td align="left">512</td>
+<td align="left">13956</td>
+<td align="left">18862</td>
+<td align="left">+35.15%</td>
+</tr>
+
+<tr>
+<td align="left">1024</td>
+<td align="left">28074</td>
+<td align="left">37508</td>
+<td align="left">+33.60%</td>
+</tr>
+
+<tr>
+<td align="left">2048</td>
+<td align="left">55562</td>
+<td align="left">75552</td>
+<td align="left">+35.98%</td>
+</tr>
+
+<tr>
+<td align="left">4096</td>
+<td align="left">110502</td>
+<td align="left">154085</td>
+<td align="left">+39.44%</td>
+</tr>
+
+<tr>
+<td align="left">8192</td>
+<td align="left">220145</td>
+<td align="left">305980</td>
+<td align="left">+38.99%</td>
+</tr>
+
+<tr>
+<td align="left">16384</td>
+<td align="left">441996</td>
+<td align="left">604432</td>
+<td align="left">+36.75%</td>
+</tr>
+
+<tr>
+<td align="left">32768</td>
+<td align="left">886141</td>
+<td align="left">1213378</td>
+<td align="left">+36.93%</td>
+</tr>
+
+<tr>
+<td align="left">65536</td>
+<td align="left">1755980</td>
+<td align="left">2400093</td>
+<td align="left">+36.68%</td>
+</tr>
+
+<tr>
+<td align="left">131072</td>
+<td align="left">3511602</td>
+<td align="left">4837772</td>
+<td align="left">+37.77%</td>
+</tr>
+
+<tr>
+<td align="left">262144</td>
+<td align="left">7011034</td>
+<td align="left">9592371</td>
+<td align="left">+36.82%</td>
+</tr>
+
+<tr>
+<td align="left">524288</td>
+<td align="left">13938384</td>
+<td align="left">19138455</td>
+<td align="left">+37.31%</td>
+</tr>
+
+<tr>
+<td align="left">1048576</td>
+<td align="left">29010074</td>
+<td align="left">38539214</td>
+<td align="left">+32.85%</td>
+</tr>
+
+<tr>
+<td align="left">2097152</td>
+<td align="left">57266416</td>
+<td align="left">80684682</td>
+<td align="left">+40.89%</td>
+</tr>
+</tbody>
+</table>
+
+<p>You can see the full results <a href="../assets/data/fifobench/benchcmp.txt">here</a>.</p>
+
+<p>The results are consistent when $n&lt;32$ for enqueuing, but the dequeuing
+benchmarks take too long to converge to meaninful results, so I&rsquo;ve given
+up on producing them.</p>
+
+<p>Still, 32 is a pretty decent number and you won&rsquo;t notice any difference,
+ using a list or a slice, for 32 or less elements.</p>
+
+<h2>Conclusion</h2>
+
+<p>That&rsquo;s it, Tv was right.  The more you know!  If you want to have a look
+at the full code, find it <a href="https://github.com/aybabtme/antoine.im/tree/master/assets/data/fifobench">here</a>.</p>
+
+<h2>Thanks</h2>
+
+<p>I would like to thank:</p>
+
+<ul>
+<li><a href="https://twitter.com/tv">Tv</a>,</li>
+<li><a href="https://github.com/cespare">Caleb Spare</a>,</li>
+<li><a href="https://twitter.com/_alexcoco">Alex Coco</a>,</li>
+<li><a href="https://twitter.com/jstorimer">Jesse Storimer</a>,</li>
+<li><a href="https://twitter.com/benbjohnson">Ben Johnson</a>, and</li>
+<li><a href="https://twitter.com/wvanbergen">Willem van Bergen</a></li>
+</ul>
+
+<p>&hellip;for reviewing the draft of this post.</p>
+
+<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+<script type="text/javascript">
+// Single $ for inline LaTeX
+MathJax.Hub.Config({
+  tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}
+});
+</script>
+
+</article>
+
+</div>
+<footer>
+© Antoine Grondin, 2014
+</footer>
+
+<script type="text/javascript" src="../assets/js/brog.js"></script>
+
+
+<!-- Code Highlighting -->
+<!--
+<script type="text/javascript" src="/assets/js/highlight.min.js"></script>
+<script type="text/javascript">
+// Please do highlight my code.
+hljs.initHighlightingOnLoad();
+</script>
+-->
+<!-- Google Analytics -->
+<script>
+(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+ga('create', 'UA-45729425-1', 'antoine.im');
+ga('send', 'pageview');
+</script>
+
+</body>
+
+</html>

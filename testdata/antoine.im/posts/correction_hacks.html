@@ -1,0 +1,263 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    
+    <title>Correction Hacks</title>
+    <meta name="description" content="Correcting assignments with the Blackboard software is a real pain.  Here's how I helped myself having a nicer day.">
+    <meta name="citation_authors" content="Antoine Grondin">
+    
+    
+<link rel="stylesheet" type="text/css" href="../assets/css/brog.css"></link>
+<link rel="stylesheet" type="text/css" href="../assets/css/font-awesome.min.css">
+<link rel="stylesheet" type="text/css" href="../assets/css/styles/github.css">
+
+</head>
+
+<body>
+<header>
+  
+<h1>Antoine Grondin<h1>
+
+</header>
+
+<a href="https://github.com/aybabtme"><i class="fa fa-github-square fa-2x"></i></a>
+<a href="https://twitter.com/AntoineGrondin"><i class="fa fa-twitter fa-2x"></i></a>
+
+<div id="content">
+
+<p>Go back to the <a href="../index.html">index</a>.</p>
+
+<h1>Correction Hacks</h1>
+<p>
+    <small>
+      By Antoine Grondin, Monday November 4, 2013 -
+      Is there an error in this post?  Submit a fix <a href="https://github.com/aybabtme/antoine.im/">here</a>.
+    </small>
+</p>
+
+<article>
+    <p>Nota:</p>
+
+<blockquote>
+<p>This is certainly not the most efficient way to do this.  This is just the way I did it tonight because it made me happy.  It might not even be an intelligent way to do this.  Whatever, it&rsquo;s fun.</p>
+</blockquote>
+
+<p>I&rsquo;m doing some TA work for the first year class of C at UofO.  For some insane reason, they decided that all engineers <strong>not</strong> in a computer related field would learn C in first year.</p>
+
+<p>Meanwhile, all computer related engineers (software and computer engineers), along with computer scientist, learn Java as their first language.  So overall, it&rsquo;s a messed up curriculum, but whatever.  That&rsquo;s not the scope of this post.</p>
+
+<h2>Correction is painful</h2>
+
+<p>I didn&rsquo;t quite know that before.  I&rsquo;m sure it could be made better, but the software used at UofO to manage classes is quite painful to deal with.  It tries to keep you in its web UI and work from there.  Problem is:</p>
+
+<ul>
+<li>It doesn&rsquo;t support most filetypes.</li>
+<li>Its UI is unusable.</li>
+<li>It&rsquo;s just not convenient.</li>
+</ul>
+
+<p>Because they want you to use their web app, they didn&rsquo;t put much care into making offline work usable.  All you get, pretty much, is a giant dump of all the 192 students&rsquo; files and you have to navigate through that.</p>
+
+<p>So why a hack?</p>
+
+<h2>Because Blackboard S*cks</h2>
+
+<p>I don&rsquo;t want to spend more time than required doing this correction thing. So I developped a basic workflow.</p>
+
+<p>Here&rsquo;s how it goes:</p>
+
+<ul>
+<li>Download all the student files</li>
+<li>Dump them in a folder.</li>
+<li>Create <code>done/</code>, <code>todo/</code> and <code>wip/</code> folders.</li>
+<li>Send everything to <code>todo/</code></li>
+<li>For every student ID:
+
+<ul>
+<li>Move its files to <code>wip/</code></li>
+<li>Correct them (compile, run in a VM, look at the report)</li>
+<li>Move the files to <code>done/</code></li>
+</ul></li>
+</ul>
+
+<p>It sounds simple, but think about the cost of every loop iteration (that not any real programming language):</p>
+
+<pre lang="bash"><code>mv *studentID* wip/
+cd wip/
+if [ `cwd`.Contains(zipFile) ]
+    unzip zipFile
+open *.doc *.docx *.odt *.pdf
+cc *.c -Wall
+./a.out
+doTheCorrectionDance()
+rm a.out
+cd ..
+mv wip/* done/
+</code></pre>
+
+<p>That&rsquo;s quite a lot of typing in your terminal, and it&rsquo;s annoying.  There are things you can inline:</p>
+
+<pre lang="bash"><code>unzip *.zip &amp;&amp;
+    open *.doc *.docx *.odt *.pdf &amp;&amp;
+    cc *.c -Wall                  &amp;&amp;
+    ./a.out                       &amp;&amp;
+</code></pre>
+
+<p>So that at every iteration, you just <code>arrow-up</code> to this command and run it.  You&rsquo;re in a VM so you don&rsquo;t really care about running random code.  If something fucks up, you just kill the VM.</p>
+
+<p>The biggest problem remain, there are a lot of little stupid commands to do in order to move the proper student&rsquo;s files into the proper folders at the right time.</p>
+
+<h2>Is There A Solution Out Of This Nightmare</h2>
+
+<p>When you download a dump of assignments from Blackboard, the students&rsquo; files share a common filename format: they all contain their student number in the prefix.</p>
+
+<pre><code>Assignment\ 2_XXXXXXX_Tentative_2013-10-27-17-28-14_asg\ 2\ final.docx
+</code></pre>
+
+<p>A simple tool to help you do the correction would pick all the file in <code>wip/</code>, move them to <code>done/</code>, then pick the files with the <code>XXXXXXX</code> student ID string in <code>todo/</code> and move them into <code>wip/</code>.  Just doing that would save you all these commands:</p>
+
+<pre><code>mv *studentID* wip/
+cd wip/
+cd ..
+mv wip/* done/
+</code></pre>
+
+<p>Which aren&rsquo;t easily inlinable in a simple <code>bash</code> onliner.  I mean, I&rsquo;m sure there&rsquo;s a way to do this with some bash magic.  I&rsquo;m not a bash magician, so I wrote a Go <em>script</em> to do this.</p>
+
+<p>I&rsquo;ll use a couple of Go packages, here they are:</p>
+
+<pre lang="go"><code>import (
+    // To print on the screen
+    &quot;fmt&quot;
+    // A package I made to colorize strings
+    &quot;github.com/aybabtme/color/brush&quot;
+    // To rename files
+    &quot;os&quot;
+    // To create filenames and clean them
+    &quot;path&quot;
+    // To walk the directories
+    &quot;path/filepath&quot;
+    // To match the studentIDs in the filenames
+    &quot;regexp&quot;
+)
+</code></pre>
+
+<p>First I&rsquo;ll need to keep track of what are the files in <code>wip/</code> and <code>todo/</code>.  I&rsquo;ll index those by <code>studentID</code> so I can easily get all the files of a specific student.</p>
+
+<pre lang="go"><code>todoFiles := make(map[string][]string)
+wipFiles := make(map[string][]string)
+</code></pre>
+
+<p>Next, I need to have a way to get the student IDs that are in play.  This simple regexp will do, since student IDs are all 7 digits long.</p>
+
+<pre lang="go"><code>regexpStdID := regexp.MustCompile(`\d{7}`)
+</code></pre>
+
+<p>Now, I need to collect the files that lie in <code>todo/</code>, indexed by <code>studentID</code>:</p>
+
+<pre lang="go"><code>filepath.Walk(&quot;todo/&quot;, func(path string, fi os.FileInfo, err error) error {
+    if !regexpStdID.Match([]byte(fi.Name())) {
+        return nil
+    }
+    stdID := regexpStdID.FindString(fi.Name())
+    todoFiles[stdID] = append(todoFiles[stdID], &quot;todo/&quot;+fi.Name())
+    return nil
+})
+</code></pre>
+
+<p>We do the same thing with <code>wip/</code>:</p>
+
+<pre lang="go"><code>// Collect all the files in `wip`
+filepath.Walk(&quot;wip/&quot;, func(path string, fi os.FileInfo, err error) error {
+    // Do the same thing
+})
+</code></pre>
+
+<p>Then, we move all the files we&rsquo;ve found in <code>wip/</code> to <code>done/</code>.</p>
+
+<pre lang="go"><code>// Move all the files in `wip` to `done`
+for _, filenamesToMove := range wipFiles {
+    for _, wipFilename := range filenamesToMove {
+        doneFilename := path.Join(&quot;done&quot;, path.Base(wipFilename))
+        err := os.Rename(wipFilename, doneFilename)
+        if err != nil {
+            fmt.Printf(&quot;Didn't work, %v\n&quot;, err)
+            continue
+        }
+    }
+}
+</code></pre>
+
+<blockquote>
+<p><em>In fact, this part could simply have been to move anything in <code>wip/</code> to <code>done/</code>, there&rsquo;s no need to actually collect the student IDs for <code>wip/</code>.</em></p>
+</blockquote>
+
+<p>Now that <code>wip/</code> is emptied, it&rsquo;s time to find the next student to grade:</p>
+
+<pre lang="go"><code>// Find the student number of the first document in `todo`
+var firstTodo string
+for todoKey := range todoFiles {
+    firstTodo = todoKey
+    break
+}
+</code></pre>
+
+<p>If we don&rsquo;t have anything to do, print it in <span style="font-color: red;">red</span>!  So we clearly know we&rsquo;re done.</p>
+
+<pre lang="go"><code>// Didn't find anything, then we're done
+if firstTodo == &quot;&quot; {
+    fmt.Println(brush.Red(&quot;Nothing to do&quot;))
+    return
+}
+</code></pre>
+
+<p>Then move all those student&rsquo;s files to <code>wip/</code>:</p>
+
+<pre lang="go"><code>// For every file with this student ID, move it from `todo` to `wip`
+for _, filename := range todoFiles[firstTodo] {
+
+    destination := path.Join(&quot;wip&quot;, path.Base(filename))
+
+    err := os.Rename(filename, destination)
+    if err != nil {
+        fmt.Printf(&quot;Didn't work, %v\n&quot;, brush.Red(err.Error()))
+        continue
+    }
+}
+</code></pre>
+
+<p>That&rsquo;s it!  Now, all you have to do is run this script everytime you&rsquo;re done with a student.</p>
+
+</article>
+
+</div>
+<footer>
+© Antoine Grondin, 2014
+</footer>
+
+<script type="text/javascript" src="../assets/js/brog.js"></script>
+
+
+<!-- Code Highlighting -->
+<!--
+<script type="text/javascript" src="/assets/js/highlight.min.js"></script>
+<script type="text/javascript">
+// Please do highlight my code.
+hljs.initHighlightingOnLoad();
+</script>
+-->
+<!-- Google Analytics -->
+<script>
+(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+ga('create', 'UA-45729425-1', 'antoine.im');
+ga('send', 'pageview');
+</script>
+
+</body>
+
+</html>
