@@ -1,7 +1,7 @@
 # Crawler
 
 [![Build Status](https://drone.io/github.com/aybabtme/crawler/status.png)](https://drone.io/github.com/aybabtme/crawler/latest)
-[![Coverage Status](https://img.shields.io/coveralls/aybabtme/crawler.svg)](https://coveralls.io/r/aybabtme/crawler)
+[![Coverage Status](https://coveralls.io/repos/aybabtme/crawler/badge.png?branch=master)](https://coveralls.io/r/aybabtme/crawler?branch=master)
 
 A simple domain crawler.
 
